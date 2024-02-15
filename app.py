@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect
+from flask import Flask, render_template, request, redirect, jsonify, Response
 import sqlite3
 from flask_sqlalchemy import SQLAlchemy
 
@@ -26,6 +26,7 @@ class Location(db.Model):
 class Employee(db.Model):
     __tablename__="employees"
     id=db.Column(db.Integer, primary_key=True)
+    password=db.Column(db.String(20))
     employee_name=db.Column(db.String(20))
     gender=db.Column(db.String(6))
     title=db.Column(db.String(10))
@@ -36,8 +37,9 @@ class Employee(db.Model):
     location_rel=db.relationship('Location', backref='employees_location')
     equipment_rel=db.relationship('Equipment', backref='equipment_employee')
     
-    def __init__(self, employee_name, gender, title, type, phone_number, department, location):
+    def __init__(self, employee_name, password, gender, title, type, phone_number, department, location):
         self.employee_name=employee_name
+        password=password
         self.gender=gender
         self.title=title
         self.type=type
@@ -117,71 +119,66 @@ def entry_point():
     equipment = equipment, equipment_count=equipment_count
     )
 
-
 @app.route('/login')
 def login():
     return render_template('login.html')
 
+@app.route('/search', methods=['GET'])
+def search():
+    res = None
+    entity = request.args.get('entity')
+    query = request.args.get('query')
+
+    if entity == 'location':
+        data = Location.query.filter(Location.location_name.contains(query)).all()
+        res = jsonify([{ 
+            "location_name": r.location_name, "number_of_offices": r.number_of_offices, "head_quater_contact": r.number_of_offices
+        } for r in data])
+
+    elif entity == 'employee':
+        data = Employee.query.filter(Employee.employee_name.contains(query)).all()
+        res = jsonify([{ 
+            "employee_name": r.employee_name, "gender": r.gender, "title": r.title, "type": r.type, "phone_number": r.phone_number, "department": r.department, "location_id": r.location_id
+        } for r in data])
+
+    elif entity == 'equipment':
+        data = Equipment.query.filter(Equipment.type.contains(query)).all()
+        res = jsonify([{ 
+            "type": r.type, "serial_number": r.serial_number, "model_number": r.model_number, "purchase_date": r.purchase_date, "employee": r.employee, "location_id": r.location_id
+        } for r in data])
+
+    elif entity == 'purchase':
+        data = Purchase.query.filter(Purchase.store.contains(query)).all()
+        res = jsonify([{ 
+            "date": r.date, "store": r.store, "warranty_period": r.warranty_period, 
+        } for r in data])
+        
+    else:
+        res = Response("Invalid entity", status=400)
+
+    return res
+
+@app.route('/equipment')
+def equipment_index():
+    equipment = Equipment.query.all()
+    return render_template('equipmentList.html', equipment = equipment)
 
 @app.route('/location')
 def location():
     locations = Location.query.all()
     return render_template ('locationList.html', locations = locations) 
 
-@app.route('/add-location', methods=['GET', 'POST'])
-def add_location_details():
-    if request.method == 'GET':
-        return render_template('locationForm.html')
+@app.route('/employee')
+def employee_index():
+    employees = Employee.query.all()
+    return render_template ('employeeList.html', employees = employees) 
 
-    if request.method == 'POST':
-        # Handle the form submission
-        location_name = request.form['location_name']
-        number_of_offices = request.form['number_of_offices']
-        head_quater_contact = request.form['head_quater_contact']
-        location = Location(
-            location_name=location_name,
-            number_of_offices=number_of_offices,
-            head_quater_contact=head_quater_contact
-        )
-        db.session.add(location)
-        db.session.commit()
-        return redirect('/location')
+@app.route('/purchase')
+def purchase():
+    purchases = Purchase.query.all()
+    return render_template('purchaseList.html', purchases=purchases)
 
-    # If the request method is not GET or POST, return an error response
-    return 'Method Not Allowed', 405
-
-@app.route('/add-employee', methods=['GET', 'POST'])
-def add_employee_details():
-    locations = Location.query.all()
-    if request.method == 'GET':
-        return render_template('employeeForm.html', locations=locations)
-
-    if request.method == 'POST':
-        # Handle the form submission
-        employee_name = request.form['employee_name']
-        gender = request.form['gender']
-        title = request.form['title']
-        type = request.form['type']
-        phone_number = request.form['phone_number']
-        department = request.form['department']
-        location = request.form['location']
-        employee = Employee(
-            employee_name=employee_name,
-            gender=gender,
-            title=title,
-            type=type,
-            phone_number=phone_number,        
-            department=department,
-            location=location,
-        )
-        db.session.add(employee)
-        db.session.commit()
-        return redirect('/employee')
-
-    # If the request method is not GET or POST, return an error response
-    return 'Method Not Allowed', 405
-
-@app.route('/add-equipment', methods=['GET', 'POST'])
+@app.route('/add_equipment', methods=['GET', 'POST'])
 def add_equipment_details():
     locations = Location.query.all()
     employees = Employee.query.all()
@@ -212,13 +209,62 @@ def add_equipment_details():
     # If the request method is not GET or POST, return an error response
     return 'Method Not Allowed', 405
 
-@app.route('/purchase')
-def purchase():
-    purchases = Purchase.query.all()
-    return render_template('purchaseList.html', purchases=purchases)
+@app.route('/add_location', methods=['GET', 'POST'])
+def add_location_details():
+    if request.method == 'GET':
+        return render_template('locationForm.html')
 
+    if request.method == 'POST':
+        # Handle the form submission
+        location_name = request.form['location_name']
+        number_of_offices = request.form['number_of_offices']
+        head_quater_contact = request.form['head_quater_contact']
+        location = Location(
+            location_name=location_name,
+            number_of_offices=number_of_offices,
+            head_quater_contact=head_quater_contact
+        )
+        db.session.add(location)
+        db.session.commit()
+        return redirect('/location')
 
-@app.route('/add-purchase', methods=['GET', 'POST'])
+    # If the request method is not GET or POST, return an error response
+    return 'Method Not Allowed', 405
+
+@app.route('/add_employee', methods=['GET', 'POST'])
+def add_employee_details():
+    locations = Location.query.all()
+    if request.method == 'GET':
+        return render_template('employeeForm.html', locations=locations)
+
+    if request.method == 'POST':
+        # Handle the form submission
+        employee_name = request.form['employee_name']
+        password = request.form['password']
+        gender = request.form['gender']
+        title = request.form['title']
+        type = request.form['type']
+        phone_number = request.form['phone_number']
+        department = request.form['department']
+        location = request.form['location']
+        employee = Employee(
+            employee_name=employee_name,
+            password=password, 
+            gender=gender,
+            title=title,
+            type=type,
+            phone_number=phone_number,        
+            department=department,
+            location=location,
+        )
+        db.session.add(employee)
+        db.session.commit()
+        return redirect('/employee')
+
+    # If the request method is not GET or POST, return an error response
+    return 'Method Not Allowed', 405
+   
+@app.route('/add_purchase', methods=['GET', 'POST'])
 def add_purchase_details():
     if request.method == 'GET':
         return render_template('purchaseForm.html')
@@ -232,28 +278,27 @@ def add_purchase_details():
         db.session.commit()
         return redirect('/purchase')
     
+    # If the request method is not GET or POST, return an error response
+    return 'Method Not Allowed', 405
 
-@app.route('/edit_purchase<int:id>', methods=['GET' ,'POST' ])
-def edit_purchase(id):
-    purchase = Purchase.query.get(id)
+@app.route('/edit_equipment<int:barcode_number>',  methods=['GET' ,'POST' ])
+def edit_equipment(barcode_number):
+    locations = Location.query.all()
+    employees = Employee.query.all()
+    purchases = Purchase.query.all()
+    equipment = Equipment.query.get(barcode_number)
     if request.method == 'GET':
-        return render_template('edit_purchase.html' ,purchase=purchase)
+        return render_template('edit_equipment.html', equipment=equipment, locations=locations, purchases=purchases, employees=employees)
     
     if  request.method == 'POST':
-        purchase.date = request.form['date']
-        purchase.store = request.form['store']
-        purchase.warranty_period = request.form['warranty_period']
+        equipment.type = request.form['type']
+        equipment.serial_number = request.form['serial_number']
+        equipment.model_number = request.form['model_number']
+        equipment.purchase_date = request.form['purchase_date']
+        equipment.employee = request.form['employee']
+        equipment.location = request.form['location']
         db.session.commit()
-        return redirect('/purchase')
-
-
-@app.route('/delete_purchase<int:id>')
-def delete_purchase(id):
-    purchase = Purchase.query.get_or_404(id)
-    db.session.delete(purchase)
-    db.session.commit()
-    return redirect('/purchase')    
-
+        return redirect('/equipment')
 
 @app.route('/edit_location<int:id>', methods=['GET' ,'POST' ])
 def edit_location(id):
@@ -274,7 +319,7 @@ def edit_employee(id):
     employee = Employee.query.get(id)
     if request.method == 'GET':
         return render_template('edit_employee.html', employee=employee, locations=locations)
-    
+
     if  request.method == 'POST':
         employee.employee_name = request.form['employee_name']
         employee.gender = request.form['gender']
@@ -286,38 +331,18 @@ def edit_employee(id):
         db.session.commit()
         return redirect('/employee')
 
-@app.route('/edit_equipment<int:barcode_number>', methods=['GET' ,'POST' ])
-def edit_equipment(barcode_number):
-    locations = Location.query.all()
-    employees = Employee.query.all()
-    purchases = Purchase.query.all()
-    equipment = Equipment.query.get(barcode_number)
+@app.route('/edit_purchase<int:id>', methods=['GET' ,'POST' ])
+def edit_purchase(id):
+    purchase = Purchase.query.get(id)
     if request.method == 'GET':
-        return render_template('edit_equipment.html', equipment=equipment, locations=locations, purchases=purchases, employees=employees)
+        return render_template('edit_purchase.html' ,purchase=purchase)
     
     if  request.method == 'POST':
-        equipment.type = request.form['type']
-        equipment.serial_number = request.form['serial_number']
-        equipment.model_number = request.form['model_number']
-        equipment.purchase_date = request.form['purchase_date']
-        equipment.employee = request.form['employee']
-        equipment.location = request.form['location']
+        purchase.date = request.form['date']
+        purchase.store = request.form['store']
+        purchase.warranty_period = request.form['warranty_period']
         db.session.commit()
-        return redirect('/equipment')
-
-@app.route('/delete_location<int:id>')
-def delete_location(id):
-    location = Location.query.get_or_404(id)
-    db.session.delete(location)
-    db.session.commit()
-    return redirect('/location')
-    
-@app.route('/delete_employee<int:id>')
-def delete_employee(id):
-    employee = Employee.query.get_or_404(id)
-    db.session.delete(employee)
-    db.session.commit()
-    return redirect('/employee')
+        return redirect('/purchase')
 
 @app.route('/delete_equipment<int:barcode_number>')
 def delete_equipment(barcode_number):
@@ -326,15 +351,26 @@ def delete_equipment(barcode_number):
     db.session.commit()
     return redirect('/equipment')
 
-@app.route('/equipment')
-def equipment_index():
-    equipment = Equipment.query.all()
-    return render_template('equipmentList.html', equipment = equipment)
+@app.route('/delete_location<int:id>')
+def delete_location(id):
+    location = Location.query.get_or_404(id)
+    db.session.delete(location)
+    db.session.commit()
+    return redirect('/location')
 
-@app.route('/employee')
-def employee_index():
-    employees = Employee.query.all()
-    return render_template ('employeeList.html', employees = employees) 
+@app.route('/delete_employee<int:id>')
+def delete_employee(id):
+    employee = Employee.query.get_or_404(id)
+    db.session.delete(employee)
+    db.session.commit()
+    return redirect('/employee')
 
+@app.route('/delete_purchase<int:id>')
+def delete_purchase(id):
+    purchase = Purchase.query.get_or_404(id)
+    db.session.delete(purchase)
+    db.session.commit()
+    return redirect('/purchase') 
+   
 if __name__ == '__main__':
     app.run(host='localhost', port=8080, debug=True)

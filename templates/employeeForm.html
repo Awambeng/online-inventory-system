@@ -13,11 +13,16 @@
   <script src="script.js"></script>
 </body>
 <div class="container">
-    <form id="form" action="/add-employee" method="POST">
+    <form id="form" action="/add_employee" method="POST">
         <h1>Employee Form</h1>
         <div class="input-control">
             <label for="employee_name">Name:</label>
             <input id="employee_name" name="employee_name" type="text" required>
+            <!-- <div class="error"></div> -->
+        </div>
+        <div class="input-control">
+            <label for="password">Password:</label>
+            <input id="password" name="password" type="text" required>
             <!-- <div class="error"></div> -->
         </div>
         <div class="input-control">
